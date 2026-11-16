@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from app.config import Config
-from app.db import get_db, init_db
+from app.db import WriteLockedError, get_db, init_db, read_snapshot, write_transaction
 from app.services import (
     execute_judgment,
     list_judgments,
@@ -18,6 +18,7 @@ from app.services import (
     run_expire_scan,
     run_reconcile,
 )
+from app.services.reconcile import CountDriftError, build_snapshot
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
@@ -131,8 +132,11 @@ async def api_create_scan(request: Request):
     as_of = str(body.get("as_of_date", "")).strip()
     if not as_of:
         raise HTTPException(status_code=400, detail="缺少 as_of_date")
-    with get_db() as conn:
-        job = run_expire_scan(conn, as_of)
+    try:
+        with write_transaction() as conn:
+            job = run_expire_scan(conn, as_of)
+    except WriteLockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True, "job": job}
 
 
@@ -147,8 +151,11 @@ def api_judgments(request: Request, status: str | None = None):
 def api_execute(request: Request, judgment_id: int):
     require_user(request)
     try:
-        with get_db() as conn:
+        # 裁撤落笔与对账落库共用同一把写锁：两名值班并发时只放一个进去。
+        with write_transaction() as conn:
             run = execute_judgment(conn, judgment_id)
+    except WriteLockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True, "run": run}
@@ -168,6 +175,14 @@ def api_reports(request: Request):
         return {"items": list_reports(conn)}
 
 
+@app.get("/api/reconcile/snapshot")
+def api_reconcile_snapshot(request: Request):
+    """读页瞬间冻结：卡片 / 执行列表 / 分区详情三块同一读点同源返回。"""
+    require_user(request)
+    with read_snapshot() as (conn, snapshot_at):
+        return {"ok": True, "snapshot": build_snapshot(conn, snapshot_at)}
+
+
 @app.post("/api/reconcile-reports")
 async def api_reconcile(request: Request):
     require_user(request)
@@ -175,6 +190,14 @@ async def api_reconcile(request: Request):
     as_of = str(body.get("as_of_date", "")).strip()
     if not as_of:
         raise HTTPException(status_code=400, detail="缺少 as_of_date")
-    with get_db() as conn:
-        report = run_reconcile(conn, as_of)
+    try:
+        # 对账落库与裁撤执行共用写锁；报告数字在同一写事务读点内计数并复核。
+        with write_transaction() as conn:
+            report = run_reconcile(conn, as_of)
+    except WriteLockedError as exc:
+        # 两名值班并发写：后来者快速失败，绝不排队双写。
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CountDriftError as exc:
+        # 混数即拦：账实对不上时整个事务已回滚，不产生脏报告。
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True, "report": report}

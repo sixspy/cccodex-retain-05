@@ -177,6 +177,64 @@ th { color: var(--muted); font-weight: 550; }
 .tag.warn { color: var(--warn); border-color: #5a4d2e; }
 .tag.bad { color: var(--bad); border-color: #5a3535; }
 .empty { color: var(--muted); padding: 12px 0; }
+
+/* 对账摘要 KPI 卡：数字用主文本色，状态只由左侧细条+小标签色调承载 */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.kpi {
+  background: #18202c;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  padding: 10px 12px;
+}
+.kpi.ok { border-left-color: var(--ok); }
+.kpi.warn { border-left-color: var(--warn); }
+.kpi.bad { border-left-color: var(--bad); }
+.kpi-label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.kpi-value { font-size: 26px; font-weight: 650; font-family: var(--mono); line-height: 1.1; }
+.kpi-hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+.kpi.ok .kpi-label { color: var(--ok); }
+.kpi.warn .kpi-label { color: var(--warn); }
+.kpi.bad .kpi-label { color: var(--bad); }
+
+.snapshot-at {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+
+/* 错位状态条：图标+文字双通道，不只靠颜色 */
+.statusbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.statusbar.ok { border-color: #3d5a48; background: rgba(111, 173, 138, 0.08); }
+.statusbar.bad { border-color: #5a3535; background: rgba(201, 107, 107, 0.08); }
+.status-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+}
+.statusbar.ok .status-dot { background: var(--ok); }
+.statusbar.bad .status-dot { background: var(--bad); }
+.mismatch-list { margin: 8px 0 0; padding-left: 18px; color: var(--ink); }
+.mismatch-list li { margin-bottom: 4px; }
+
+.rec-msg { font-size: 13px; color: var(--muted); }
+.rec-msg.ok { color: var(--ok); }
+.rec-msg.bad { color: var(--bad); }
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }
   .nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; gap: 6px; overflow-x: auto; }
